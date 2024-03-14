@@ -1,0 +1,204 @@
+model Producti_Co
+uses "mmxprs"
+! Assessment 2: 20/10/2022, Josephine Li, s2346729
+
+! --- declarations ---!
+  declarations
+    ! index
+    number_of_products = 7
+    products = 1.. number_of_products
+    days = 1..7
+    worktypes = 1..2 ! 1: full time; 2: part time
+    number = 1..7 ! for schedule
+
+    ! constant
+    price: array(products) of real
+    production_time: array(products) of real
+    salaries: array(worktypes) of real ! pound/per hour
+    worktime: array(worktypes) of real
+    arrange: array(days, number) of real
+    M_p7 = 421
+    M_p2_2 = 1226
+    M_p3 = 1481
+    M_p4 = 1667
+
+    day_name: array(days) of string
+    worktypes_name: array(worktypes) of string
+
+    ! variables
+    make: array(products, days) of mpvar ! the number of different products // produced in different days
+    time: array(products, days) of mpvar ! producing time for different products on different days
+    work: array(worktypes,days)  of mpvar ! the number of person work for every day in different types
+    group: array(worktypes,number) of mpvar ! the number of person for different type of workers in different groups
+    schedule: array(worktypes,days,number) of mpvar! example: schedule(1,3,2) :chedule(1,3,2) part time workers work for 3 days on Monday
+
+
+    ! auxiliary variables
+    a_p7, a_p2_1, a_p2_2, a_p3, a_p4, a_p3p4: array(days) of mpvar
+
+    ! extra constrains variables
+    adding_hour_p3p4, adding_cost_p7: array(days) of mpvar
+    p2_1, p2_2 : array(days) of mpvar
+
+  end-declarations
+
+
+
+! --- initialisations --- !
+  initialisations from "Producti_Co.dat"
+    price day_name worktypes_name production_time salaries worktime arrange
+  end-initialisations
+
+! --- objective function ---!
+  profit:= sum(p in products, d in days) make(p,d)*price(p) - sum(d in days) adding_cost_p7(d) - sum(w in worktypes) salaries(w)*worktime(w)*(sum(d in days) work(w,d))
+
+
+! --- constrains --- !
+  ! part-time working hour <= total working hour *25%
+  forall(d in days) do
+    work(2, d) <= sum(p in  products) time(p,d)*0.25
+    work(2, d) >= 0
+  end-do
+
+! maximum working person : 500/per day
+  forall(d in days) do
+    sum(w in worktypes) work(w,d) <= 500
+    sum(w in worktypes) work(w,d) >= 0
+  end-do
+
+! if produce product 7 : +2000 cost a day; M _p7 = 421
+  forall(d in days) do
+    make(7,d) <= a_p7(d)*M_p7
+    adding_cost_p7(d) = a_p7(d)*2000
+  end-do
+
+! if produce 3&4: +75 hours (M3 = 1481, M4 = 1667)
+  forall(d in days) do
+    make(3,d) <= a_p3(d) * M_p3
+    make(4,d) <= a_p4(d) * M_p4
+  end-do
+  forall(d in days) do
+    a_p3(d) + a_p4(d) <= (a_p3p4(d)+1)
+    adding_hour_p3p4(d) = a_p3p4(d)*75
+  end-do
+
+! product 2 over 100: 3 hours/per unit (M2=1266)
+  forall(d in days) do
+    p2_1(d) - 100 <= a_p2_1(d)
+    p2_2(d) <= a_p2_2(d)*M_p2_2
+    a_p2_2(d) <= a_p2_1(d)
+    make(2,d) = p2_1(d) + p2_2(d)
+  end-do
+
+! work 5 days --> rest 2 days : in arrange
+  forall(d in days, n in number ,w in worktypes) do
+    schedule(w,d,n) = arrange(d,n)*group(w,n)
+  end-do
+
+! relations between variables
+  ! the relation between time and product
+  forall(p in products, d in days) do
+    time(p,d) = make(p,d)*production_time(p)
+    if p = 2 then
+      time(2,d) = p2_1(d)*2 + p2_2(d)*3
+    end-if
+    if p = 3 then
+      time(3,d) = time(3,d) + adding_hour_p3p4(d)
+    end-if
+  end-do
+
+  ! the relation between total used time and the time workers should denote
+  forall(d in days) do
+    sum(p in products) time(p,d) = work(1,d)*8 + work(2,d)*4
+  end-do
+
+  forall(w in worktypes, d in days) do
+    sum(n in number) schedule(w,d,n) = work(w,d)
+  end-do
+
+! the amounts of production are integer
+  forall(p in products, d in days) do
+    make(p,d) is_integer
+    p2_1(d) is_integer
+    p2_2(d) is_integer
+  end-do
+
+! the amounts of workers are interger
+  forall(w in worktypes, d in days, n in number) do
+    work(w,d) is_integer
+    group(w,n) is_integer
+    schedule(w,d,n) is_integer
+    group(w,n) is_integer
+  end-do
+
+! the assisstant variables is binary
+  forall(d in days) do
+    a_p7(d) is_binary
+    a_p2_1(d) is_binary
+    a_p2_2(d) is_binary
+    a_p3(d) is_binary
+    a_p4(d) is_binary
+    a_p3p4(d) is_binary
+  end-do
+
+
+! --- problem type --- !
+  maximise(profit)
+
+
+! --- outputs --- !
+! Overview results
+  writeln("This is the plan of producing different products:")
+  forall(d in days) do
+    write(day_name(d),": ")
+    forall(p in products) do
+      if(getsol(make(p,d)) > 0) then
+        write("product",products(p),": ",getsol(make(p,d))," units. ")
+      end-if
+    end-do
+    writeln
+  end-do
+  writeln
+
+  writeln("This is the arrangement of workers:")
+  writeln("The company have ",sum(w in worktypes, n in number) getsol(group(w,n))," employees, ")
+  writeln(sum(n in number) getsol(group(1,n))," of them are full time workers, ", sum(n in number) getsol(group(2,n))," of them are part time workers." )
+  writeln
+  forall(d in days) do
+    write(day_name(d),": ")
+    forall(w in worktypes) do
+        write(getsol(work(w,d))," ",worktypes_name(w)," employees work. ")
+    end-do
+    writeln
+  end-do
+  writeln
+  writeln("The optional profit is: ",getobjval)
+  writeln
+  writeln("The specific data delays on '.csv' documents.")
+
+
+! Amounts of producing different products
+fopen("Products.csv",F_OUTPUT)
+  writeln("No.products,days,numbers")
+  forall(p in products,d in days) do
+    writeln(products(p),",", day_name(d),",", getsol(make(p,d)))
+  end-do
+fclose(F_OUTPUT)
+
+! Schedule
+fopen("Schedule.csv",F_OUTPUT)
+  writeln("day,worketype,group,woking employees number")
+  forall(w in worktypes, n in number,d in days) do
+    writeln(day_name(d), "," ,worktypes_name(w),",","Group ",n,",", getsol(schedule(w,d,n)) )
+  end-do
+fclose(F_OUTPUT)
+
+! Arrangement of workers
+fopen("Wokers.csv",F_OUTPUT)
+  writeln("No.group,worketype,wokers_amount")
+  forall(w in worktypes, n in number) do
+    writeln("Group ",n,",", worktypes_name(w),",", getsol(group(w,n)) )
+  end-do
+fclose(F_OUTPUT)
+
+end-model

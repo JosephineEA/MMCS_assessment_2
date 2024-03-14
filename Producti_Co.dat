@@ -1,0 +1,13 @@
+price: [100 420 350 490 550 100 1115]
+day_name: ["Monday" "Tuesday" "Wednesday" "Thursday" "Friday" "Saturday" "Sunday"]
+worktypes_name: ["full time" "part time"]
+production_time: [1.0 2.0 2.7 2.4 4.5 0.7 9.5]
+salaries: [110 50]
+worktime: [8 4]
+arrange: [1 0 0 1 1 1 1
+          1 1 0 0 1 1 1
+          1 1 1 0 0 1 1
+          1 1 1 1 0 0 1
+          1 1 1 1 1 0 0
+          0 1 1 1 1 1 0
+          0 0 1 1 1 1 1]
